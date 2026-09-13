@@ -1,0 +1,40 @@
+ACCEPTED_LANGUAGES:
+- en
+BOILERPLATE_MIN_OCCURRENCES: 5
+BOILERPLATE_MIN_SHARE: 0.005
+DECISION_LOG: data/processed/decision_log.md
+ENFORCE_ALTERNATION: true
+INPUT_CSV: data/raw/twcs.csv
+LANGUAGE_FILTERING: false
+LOG_FILE: logs/phase1.log
+LOG_LEVEL: INFO
+MAX_TURNS: 6
+OUTPUT_DIR: data/processed
+OUTPUT_PARQUET: data/processed/threads.parquet
+PHASE0_PROJECTIONS:
+  boilerplate_rate: 0.1718
+  branching_rate: 0.0771
+  thread_count: 55143
+POSITIVE_CLOSERS:
+- thanks
+- thank you
+- appreciate
+- appreciated
+- resolved
+- fixed
+- fixed it
+- works
+- working
+- got it
+- sorted
+- sorted out
+- perfect
+- great thanks
+- issue fixed
+- problem solved
+- sorted now
+UBER_HANDLES:
+- Uber_Support
+- Uber_SFO
+- Uber_NYC
+VALIDATION_LOG: data/processed/validation_log.txt

@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-09-12T00:04:46.787570",
+  "golden_set_size": 165,
+  "corpus_size": 26587,
+  "baseline_1_intent": {
+    "name": "Majority Class",
+    "macro_f1": 0.012032660077352816,
+    "majority_intent": "driver_quality_issue",
+    "description": "Always predict driver_quality_issue"
+  },
+  "baseline_2_retrieval": {
+    "name": "TF-IDF Retrieval",
+    "ndcg@5": 0.0,
+    "recall@5": 0.4460606060606062,
+    "corpus_size": 26587,
+    "description": "TF-IDF vectorization + cosine similarity retrieval"
+  }
+}

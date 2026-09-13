@@ -1,0 +1,21 @@
+{
+  "name": "Uber Support Agent v1",
+  "components": {
+    "intent_classifier": "models/intent_classifier.pkl",
+    "tfidf_vectorizer": "models/tfidf_vectorizer.pkl",
+    "embedding_model": "all-mpnet-base-v2",
+    "faiss_index": "data/brands/uber/index.faiss",
+    "faiss_metadata": "data/brands/uber/metadata.jsonl"
+  },
+  "escalation_signals": {
+    "low_intent_confidence": "intent_confidence < 0.5",
+    "weak_grounding": "retrieval_score < 0.7",
+    "explicit_escalation_signal": "escalation keywords present"
+  },
+  "escalation_threshold": "hard voting: 2+ signals \u2192 escalate",
+  "generation": {
+    "model": "gemini-3.5-flash-lite",
+    "max_tokens": 200,
+    "retrieved_cases": 3
+  }
+}

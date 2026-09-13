@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-09-12T00:30:15.459307",
+  "index_type": "IndexFlatL2",
+  "model": "all-mpnet-base-v2",
+  "corpus_size": 18570,
+  "embedding_dim": 768,
+  "metrics": {
+    "ndcg@5": 1.0,
+    "recall@5": 1.0,
+    "mrr": 1.0
+  }
+}

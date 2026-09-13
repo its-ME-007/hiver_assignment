@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-09-12T00:49:50.404232",
+  "model_type": "TF-IDF + Logistic Regression",
+  "tfidf_features": 5000,
+  "training_set_size": 21269,
+  "test_set_size": 5318,
+  "test_macro_f1": 0.6555438032580766,
+  "golden_macro_f1": 0.6461607407230748,
+  "per_intent_f1": {
+    "account_issue": 0.8433734939759037,
+    "delivery_quality": 0.8351648351648352,
+    "delivery_timing": 0.0,
+    "driver_quality_issue": 0.9547657512116317,
+    "lost_found_item": 0.8148148148148148,
+    "other": 0.8764397905759163,
+    "payment_disputed_charge": 0.9147381242387332,
+    "payment_refund": 0.84375,
+    "ride_cancellation": 0.8947976878612717,
+    "ride_dropoff_issue": 0.0,
+    "ride_pickup_issue": 0.11764705882352941,
+    "service_quality": 0.6535947712418301,
+    "technical_issue": 0.7729831144465291
+  }
+}
