@@ -60,11 +60,24 @@ python 09_evaluation_harness.py
 **Expected output** (~2 minutes):
 ```
 MILESTONE 8: EVALUATION HARNESS
-...
-Intent F1: 0.646
-Escalation F1: 0.709
-Retrieval score: 0.702 ± 0.065
-...
+Loading components...
+✓ Golden set: 165 examples
+================================================================================
+EVALUATION METRICS
+================================================================================
+### INTENT CLASSIFICATION ###
+Macro F1: 0.646
+### RETRIEVAL ###
+Mean retrieval score: 0.675 (±0.065)
+### ESCALATION DECISION ###
+Precision: 0.736
+Recall: 0.690
+F1: 0.712
+================================================================================
+ABLATION STUDY
+B) Current system: Intent F1 = 0.646
+   Improvement: 5270.1% (vs baseline 0.012)
+================================================================================
 ✓ Saved final evaluation: reports/final_evaluation.json
 ```
 
@@ -223,8 +236,8 @@ Customer Message
 | Component | Metric | Baseline | Our System | Improvement |
 |-----------|--------|----------|-----------|------------|
 | **Intent Classification** | Macro F1 | 0.012 | 0.646 | **5,270%** |
-| **Semantic Retrieval** | NDCG@5 | 0.000 | 1.000 | **Perfect** |
-| **Escalation Decision** | F1 | N/A | 0.709 | Strong |
+| **Semantic Retrieval** | Mean score | 0.000 | 0.675 | **Strong** |
+| **Escalation Decision** | F1 | N/A | 0.712 | **Strong** |
 | **System** | Overall | ❌ Not feasible | ✅ Working | ✅ Proven |
 
 ---

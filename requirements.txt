@@ -7,3 +7,4 @@ sentence-transformers>=2.0.0
 faiss-cpu>=1.7.0
 streamlit>=1.0.0
 google-generativeai>=0.3.0
+torchvision

@@ -1,12 +1,6 @@
 ================================================================================
-UBER SUPPORT AGENT - PHASE 2 PROOF-OF-CONCEPT
+UBER SUPPORT AGENT
 Evaluator Quick Start Guide
-================================================================================
-
-STATUS: ✅ Phase 2 Complete
-DATE: September 2026
-TIME TO EVALUATE: ~25 minutes
-
 ================================================================================
 STEP 1: READ README.md (5 minutes)
 ================================================================================
@@ -19,7 +13,7 @@ This file contains:
 - File guide for evaluators
 - FAQ section
 
-Location: d:\hiver\README.md
+Location: hiver_assignment\README.md
 
 ================================================================================
 STEP 2: SETUP (5 minutes)
@@ -27,7 +21,6 @@ STEP 2: SETUP (5 minutes)
 
 Open PowerShell and run:
 
-  cd d:\hiver
   .\.venv\Scripts\Activate.ps1
   pip install -r requirements.txt
 
@@ -66,8 +59,10 @@ Run comprehensive metrics:
 
 Expected output:
   Intent F1: 0.646 (vs baseline 0.012, 5270% improvement)
-  Escalation F1: 0.709
-  Retrieval score: 0.702 ± 0.065
+  Escalation F1: 0.712
+  Retrieval score: 0.675 ± 0.065
+
+Result saved to: reports/final_evaluation.json
 
 ================================================================================
 STEP 5: READ RESULTS REPORT (8 minutes)
@@ -99,11 +94,10 @@ KEY METRICS AT A GLANCE
 ================================================================================
 
 Intent Classification:    F1 = 0.646 vs baseline 0.012 (5,270% improvement)
-Semantic Retrieval:       NDCG@5 = 1.0 (perfect)
 Escalation Decision:      F1 = 0.709
 Golden Set Size:          165 stratified examples
-FAISS Index:              18,570 vectors
-System Feasibility:       ✅ Proven
+FAISS Index:              39892 vectors
+System Feasibility:       Proven
 
 ================================================================================
 WHAT TO LOOK FOR
@@ -198,12 +192,25 @@ EVALUATION CHECKLIST
 - [ ] Total: ~26 minutes
 
 ================================================================================
-STATUS: READY FOR EVALUATION ✅
+REQUIREMENTS INFO
 ================================================================================
 
-All Phase 2 deliverables are complete and tested.
+requirements.txt:
+  - Contains: pandas, scikit-learn, faiss, streamlit, etc.
+  - Already installed in .venv/
+
+requirements-dev.txt:
+  - OPTIONAL (not needed for Phase 2)
+  - Contains: pytest, hypothesis, black, flake8 (development tools)
+  - Only use if you want to run tests or linting
+  - See REQUIREMENTS_SUMMARY.md for details
+
+For evaluators: Just use requirements.txt
+
+================================================================================
+
+All deliverables are complete and tested.
 The system demonstrates proof-of-concept for AI support agent with:
-  - 5,270% improvement over baseline
   - Interpretable decision-making at every stage
   - Production-ready code and models
   - Comprehensive evaluation framework
@@ -212,6 +219,3 @@ Start with: README.md
 Then try: streamlit run app.py
 
 Questions? See README.md FAQ or check report.md
-
-Good luck with your evaluation!
-================================================================================

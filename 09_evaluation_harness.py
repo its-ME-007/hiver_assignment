@@ -3,6 +3,10 @@ Milestone 8: Evaluation Harness
 Comprehensive metrics, ablation study, error analysis, and final report
 """
 
+import io
+import sys
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 import json
 import pickle
 import os

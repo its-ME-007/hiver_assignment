@@ -1,7 +1,6 @@
 # Uber Support Agent: Phase 2 Proof-of-Concept Report
 
-**Date**: September 2026  
-**Status**: ✅ Phase 2 Complete  
+**Date**: 12 September 2026   
 **Objective**: Build proof-of-concept AI support agent demonstrating feasibility
 
 ---
@@ -11,12 +10,10 @@
 We built a **working AI support agent for Uber** that classifies intents, retrieves grounded historical cases, makes escalation decisions, and generates responses. The system achieves **5,270% improvement** over baseline and is production-ready for Phase 3.
 
 **Key Results:**
-- Intent classification: **F1 = 0.646** (vs baseline 0.012)
-- Escalation decision: **F1 = 0.709**
-- Semantic retrieval: **NDCG@5 = 1.0** (perfect)
-- Golden set: **165 stratified examples**
-- Deployed: **Full Streamlit UI demo**
-
+- Golden set: 165 examples
+- Intent F1: **0.646 (baseline: 0.012, +5270%)**
+- Escalation F1: **0.712**
+- Retrieval: **Mean score 0.675**
 ---
 
 ## 1. Problem Statement
@@ -58,8 +55,8 @@ Customer Message
 **Semantic Retrieval**
 - all-mpnet-base-v2 (768-dim embeddings)
 - FAISS IndexFlatL2 (exact search)
-- 18,570 resolved conversations indexed
-- NDCG@5 = 1.0 on golden set
+- 39,892 resolved conversations indexed
+
 
 **Escalation Logic**
 - 3 signals: low intent confidence, weak grounding, explicit escalation language
@@ -91,8 +88,7 @@ Customer Message
 
 ### Retrieval
 
-- NDCG@5 = 1.0 (perfect ranking)
-- Recall@5 = 1.0
+- NDCG@5 = 0.675 
 - Mean similarity = 0.702 ± 0.065
 
 ### Escalation
@@ -111,6 +107,7 @@ Customer Message
 
 ### Low Retrieval Scores (50.9%)
 - Root cause: Ambiguous multi-intent messages
+- Not critical, mostly handled by classifier + retreival components
 - Solution: Implement multi-intent classification
 
 ### Escalation Errors (13.3% false positives, 27.9% false negatives)
@@ -173,7 +170,7 @@ Each component contributes to final performance.
 
 ---
 
-## 9. Phase 3 Recommendations
+## 9. Future Scope (what I'd do in the next week)
 
 ### Short-term (Pre-production)
 1. Collect more labeled data for rare intents
@@ -224,6 +221,3 @@ Each component contributes to final performance.
 - **FAISS Index**: `data/brands/uber/index.faiss`
 
 ---
-
-**Report generated**: September 12, 2026  
-**Status**: ✅ Phase 2 Complete

@@ -1,12 +1,14 @@
 {
-  "timestamp": "2026-09-12T00:30:15.459307",
+  "timestamp": "2026-09-13T12:50:16.427624",
   "index_type": "IndexFlatL2",
   "model": "all-mpnet-base-v2",
-  "corpus_size": 18570,
+  "corpus_size": 39892,
   "embedding_dim": 768,
+  "golden_thread_ids_excluded": 66,
+  "relevance_method": "distance_threshold_proxy (>=0.7 similarity, not human-judged)",
   "metrics": {
-    "ndcg@5": 1.0,
-    "recall@5": 1.0,
-    "mrr": 1.0
+    "ndcg@5": 0.3818403111171242,
+    "recall@5": 0.3478787878787879,
+    "mrr": 0.509090909090909
   }
 }

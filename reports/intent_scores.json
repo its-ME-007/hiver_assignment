@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-12T00:49:50.404232",
+  "timestamp": "2026-09-13T12:52:32.649885",
   "model_type": "TF-IDF + Logistic Regression",
   "tfidf_features": 5000,
   "training_set_size": 21269,
