@@ -35,7 +35,7 @@ A **hierarchical AI support agent for Uber** that:
 01_brand_analysis.py           → Brand selection (Uber: 26.6k convs)
 02_intent_taxonomy.py          → 13-intent taxonomy definition
 03_build_golden_set.py         → 165-sample stratified golden set
-04_semi_auto_label_golden_set.py → Auto-labeling with heuristics
+04_semi_auto_label_golden_set.py → Manual labeling with spreadsheet tool
 05_establish_baselines.py      → Baseline systems (majority class, TF-IDF)
 06_build_faiss_index.py        → FAISS index construction (18,570 vectors)
 07_train_intent_classifier.py  → TF-IDF + Logistic Regression training
@@ -230,7 +230,7 @@ Users can try it live in Streamlit. Transparency builds trust.
 
 - ✅ Brand selection (Uber, 26.6k conversations)
 - ✅ Intent taxonomy (13 categories, validated)
-- ✅ Golden set (165 examples, auto-labeled with validation)
+- ✅ Golden set (165 examples, manually labeled)
 - ✅ Baselines (0.012 intent F1, 0.0 retrieval)
 - ✅ FAISS index (18,570 vectors, perfect retrieval)
 - ✅ Intent classifier (0.65 F1 on test, 0.65 on golden)

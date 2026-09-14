@@ -94,14 +94,14 @@ Customer Message
 1. **Phase 1 Cleaning** (55k threads): Thread reconstruction, deduplication, boilerplate detection
 2. **Brand Selection**: Uber = 26.6k conversations (most common, diverse issues)
 3. **Intent Taxonomy**: 13 human-defined intents from 200-example analysis
-4. **Golden Set**: 165 stratified examples (14-15 per intent), auto-labeled with validation
+4. **Golden Set**: 165 stratified examples (14-15 per intent), manually labeled
 5. **Indexing**: 18,570 resolved cases embedded and indexed
 
 ### 3.2 Evaluation Strategy
 
 **Golden Set (165 examples)**:
 - Stratified sampling: intent, difficulty, resolution_tier, boilerplate status
-- Labeled fields: intent, should_escalate, escalation_reason, reply_quality (1-4)
+- Manually labeled fields: intent, should_escalate, escalation_reason, reply_quality (1-4)
 - Used as both validation and test set (small POC)
 
 **Metrics**:
@@ -343,7 +343,7 @@ Customer Message
 ### A1. Golden Set Composition
 - Size: 165 examples
 - Stratification: ~15 per intent, 50% easy / 50% hard, balanced by resolution_tier
-- Labels: intent, should_escalate, escalation_reason, reply_quality (1-4), notes
+- Manually labeled fields: intent, should_escalate, escalation_reason, reply_quality (1-4), notes
 - Format: JSONL (one JSON object per line)
 
 ### A2. Model Sizes

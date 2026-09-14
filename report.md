@@ -6,7 +6,7 @@
 ---
 
 ## Executive Summary
-
+eli
 We built a **working AI support agent for Uber** that classifies intents, retrieves grounded historical cases, makes escalation decisions, and generates responses. The system achieves **5,270% improvement** over baseline and is production-ready for Phase 3.
 
 **Key Results:**
@@ -133,7 +133,7 @@ Each component contributes to final performance.
 **Golden Set**: 165 stratified examples
 - Stratified by: intent, difficulty, resolution_tier
 - Labeled fields: intent, should_escalate, escalation_reason, reply_quality
-- Used for validation throughout Phase 2
+- Labeling: All examples manually labeled
 
 **Phase 1 Data**: 55k cleaned threads
 - Deduplication, boilerplate detection, thread reconstruction

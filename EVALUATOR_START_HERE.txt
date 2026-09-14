@@ -126,7 +126,7 @@ Python Modules (M1-M8):
   - 01_brand_analysis.py         (M1: Brand selection)
   - 02_intent_taxonomy.py        (M2: Intent definition)
   - 03_build_golden_set.py       (M3: Generate golden set)
-  - 04_semi_auto_label_golden_set.py (M3: Auto-label)
+  - 04_semi_auto_label_golden_set.py (M3: Manual labeling)
   - 05_establish_baselines.py    (M4: Baselines)
   - 06_build_faiss_index.py      (M5: FAISS index)
   - 07_train_intent_classifier.py (M6: Classifier)

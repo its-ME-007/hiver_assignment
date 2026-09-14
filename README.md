@@ -112,7 +112,7 @@ d:\hiver/
 ├── 01_brand_analysis.py               ← M1: Analyze Phase 1 threads, select Uber
 ├── 02_intent_taxonomy.py              ← M2: Define 13-intent taxonomy
 ├── 03_build_golden_set.py             ← M3: Create 165-example golden set
-├── 04_semi_auto_label_golden_set.py   ← M3: Auto-label golden set
+├── 04_semi_auto_label_golden_set.py   ← M3: Manually label golden set
 ├── 05_establish_baselines.py          ← M4: Majority-class & TF-IDF baselines
 ├── 06_build_faiss_index.py            ← M5: Build FAISS index (18,570 vectors)
 ├── 07_train_intent_classifier.py      ← M6: Train TF-IDF + Logistic Regression
