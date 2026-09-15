@@ -3,9 +3,10 @@ Quick start for reviewers
 
 1) Read README.md and report.md
 2) Install dependencies
-3) Run the demo with Streamlit
-4) Run the evaluation harness
-5) Review metrics in reports/final_evaluation.json
+3) Build the local retrieval artifacts once
+4) Run the demo with Streamlit
+5) Run the evaluation harness
+6) Review metrics in reports/final_evaluation.json
 
 Setup
 -----
@@ -13,6 +14,14 @@ cd D:\hiver
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+
+Required one-time retrieval build
+---------------------------------
+The FAISS retrieval files are generated locally and are intentionally not included in Git. Run this once after setup, before the demo or evaluation:
+
+python build_faiss_index.py
+
+This creates data/brands/uber/index.faiss, embeddings.npy, and metadata.jsonl.
 
 Demo
 ----
