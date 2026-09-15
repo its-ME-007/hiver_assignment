@@ -1,473 +1,164 @@
-# Uber Support Agent: AI-Powered Customer Support PoC
+# Uber Support Agent
 
-**Status**: ✅ Phase 2 Complete  
-**Date**: September 2026  
-**Objective**: Proof-of-concept AI support agent demonstrating intent classification → retrieval → escalation → response generation
+This repository contains a Python prototype for customer-support routing on Uber-style conversations. The system combines intent classification, retrieval over historical support examples, escalation logic, and a lightweight Streamlit demo for interactive inspection.
 
----
+## Problem framing
 
-## 🎯 Quick Start for Evaluators
+The project addresses a practical support-routing problem: given an inbound customer message, determine the likely support intent, retrieve similar historical examples, and decide whether the case should be escalated to a human agent or handled automatically.
 
-### Prerequisites
-- **Python 3.10+**
-- **Virtual environment**: `.venv/` (already configured)
-- **Dependencies**: See `requirements.txt`
+This is a research and prototype system, not a production support operation. The goal is to demonstrate an end-to-end pipeline with transparent intermediate signals rather than to claim a deployment-ready production service.
 
-### Setup (5 minutes)
+## What is in this repository
 
-```bash
-# Navigate to project root
-cd d:\hiver
+The project includes:
+- `app.py` — Streamlit demo for manual inspection
+- `evaluation_harness.py` — end-to-end evaluation and metric export
+- `brand_analysis.py` — dataset selection and brand filtering logic
+- `intent_taxonomy.py` — intent definitions and categories
+- `golden_set_app.py` — exploratory labeling and review workflow
+- `establish_baselines.py` — majority-class and TF-IDF retrieval baseline setup
+- `build_faiss_index.py` — FAISS index construction
+- `train_intent_classifier.py` — TF-IDF + logistic regression training
+- `escalation_rules.py` — rule-based escalation logic and Gemini-assisted tie-break logic
+- `escalation_rag_pipeline.py` — end-to-end support-routing flow
+- `configs/labeling_rubric.md` — labeling rubric and methodology
+- `src/phase1/` — processing utilities for thread reconstruction and data preparation
 
-# Activate virtual environment
+## Setup
+
+The project expects a Python environment with the dependencies listed in `requirements.txt`.
+
+```powershell
+cd D:\hiver
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# Install dependencies (if needed)
 pip install -r requirements.txt
 ```
 
-### Run the Demo (Interactive UI)
+To enable the optional Gemini-assisted escalation path, copy the example environment file and provide a local API key:
 
-```bash
+```powershell
+copy .env.example .env
+```
+
+Then set the required local variable in `.env` without committing real credentials:
+
+```env
+GOOGLE_API_KEY=your_api_key_here
+GEMINI_MAX_RPM=12
+```
+
+This project should be treated as a local evaluator setup. The actual key must be supplied externally and not committed to version control.
+
+## Quick-start evaluator guide
+
+The repository includes a short evaluator guide in `EVALUATOR_START_HERE.txt`. That file should be treated as the fast-start path for reviewers and remains intentionally lightweight.
+
+## Run the Streamlit demo
+
+```powershell
 streamlit run app.py
 ```
 
-**Expected output:**
-```
-Collecting Streamlit source code...
-Local URL: http://localhost:8501
-Network URL: http://x.x.x.x:8501
-```
+The app allows a reviewer to inspect:
+- the predicted intent,
+- retrieved similar support cases,
+- the retrieval score,
+- the escalation decision and reasons.
 
-**Then**:
-1. Open browser → `http://localhost:8501`
-2. Enter a customer message (e.g., "I was charged twice for my ride")
-3. Click "Analyze"
-4. See: Intent classification → Retrieved cases → Escalation decision
+## Run the evaluation harness
 
-**Example inputs to try**:
-- "My driver was rude and unsafe"
-- "I can't login to my account"
-- "My food arrived cold and incomplete"
-- "Urgent: I need a refund NOW or I'm calling my lawyer"
-
-### Run Full Evaluation
-
-```bash
-python 09_evaluation_harness.py
+```powershell
+python evaluation_harness.py
 ```
 
-**Expected output** (~2 minutes):
-```
-MILESTONE 8: EVALUATION HARNESS
-Loading components...
-✓ Golden set: 165 examples
-================================================================================
-EVALUATION METRICS
-================================================================================
-### INTENT CLASSIFICATION ###
-Macro F1: 0.646
-### RETRIEVAL ###
-Mean retrieval score: 0.675 (±0.065)
-### ESCALATION DECISION ###
-Precision: 0.736
-Recall: 0.690
-F1: 0.712
-================================================================================
-ABLATION STUDY
-B) Current system: Intent F1 = 0.646
-   Improvement: 5270.1% (vs baseline 0.012)
-================================================================================
-✓ Saved final evaluation: reports/final_evaluation.json
-```
+The harness reads the labeled golden set and writes the verified summary to `reports/final_evaluation.json`.
 
-### View Results
+## Architecture and workflow
 
-```bash
-# Display golden set examples
-python show_golden_set_examples.py
-
-# Display brand analysis
-python 01_brand_analysis.py
-
-# Read final report
-cat report.md
-```
-
----
-
-## 📁 Project Structure
-
-```
-d:\hiver/
-│
-├── README.md                          ← You are here
-├── requirements.txt                   ← Python dependencies
-├── report.md                          ← 10-section final analysis (READ THIS)
-├── PHASE_2_COMPLETE.md               ← Phase 2 summary
-│
-├── app.py                             ← Streamlit UI demo (MAIN ENTRY POINT)
-├── evaluate.py                        ← [Placeholder for evaluation script]
-│
-├── 01_brand_analysis.py               ← M1: Analyze Phase 1 threads, select Uber
-├── 02_intent_taxonomy.py              ← M2: Define 13-intent taxonomy
-├── 03_build_golden_set.py             ← M3: Create 165-example golden set
-├── 04_semi_auto_label_golden_set.py   ← M3: Manually label golden set
-├── 05_establish_baselines.py          ← M4: Majority-class & TF-IDF baselines
-├── 06_build_faiss_index.py            ← M5: Build FAISS index (18,570 vectors)
-├── 07_train_intent_classifier.py      ← M6: Train TF-IDF + Logistic Regression
-├── 08_escalation_rag_pipeline.py      ← M7: Wire intent → retrieval → escalation → LLM
-├── 09_evaluation_harness.py           ← M8: Comprehensive evaluation metrics
-├── show_golden_set_examples.py        ← Helper: Display golden set samples
-│
-├── data/
-│   ├── processed/
-│   │   └── threads.parquet            ← Phase 1 output: 55k cleaned threads
-│   ├── golden_set.jsonl               ← Stratified samples (before labeling)
-│   ├── golden_set_labeled.jsonl       ← Final golden set (165 examples, labeled)
-│   ├── golden_set_labeled.csv         ← Spreadsheet format of golden set
-│   ├── intent_taxonomy.json           ← 13-intent definitions & examples
-│   └── brands/uber/
-│       ├── index.faiss                ← FAISS index (18,570 vectors)
-│       ├── metadata.jsonl             ← Index metadata (thread IDs, text, etc.)
-│       └── embeddings.npy             ← Raw embeddings cache (768-dim)
-│
-├── models/
-│   ├── intent_classifier.pkl          ← Logistic Regression classifier
-│   └── tfidf_vectorizer.pkl           ← TF-IDF vectorizer
-│
-├── configs/
-│   ├── intents.yaml                   ← Intent schema & definitions
-│   ├── labeling_rubric.md             ← Annotation guidelines
-│   └── pipeline_config.json           ← Full pipeline configuration
-│
-├── reports/
-│   ├── baseline_scores.json           ← M4 results: Baseline metrics
-│   ├── intent_scores.json             ← M6 results: Classifier performance
-│   ├── retrieval_scores.json          ← M5 results: FAISS validation
-│   ├── pipeline_test_results.jsonl    ← M7 results: 5-example pipeline test
-│   ├── final_evaluation.json          ← M8 results: Comprehensive evaluation
-│   └── visualizations/                ← [Placeholder for charts/plots]
-│
-├── src/
-│   └── phase1/                        ← Phase 1 modules (for reference)
-│       ├── config.yaml
-│       ├── config_loader.py
-│       ├── thread_finder.py
-│       ├── thread_reconstructor.py
-│       ├── resolution_classifier.py
-│       ├── boilerplate_detector.py
-│       ├── text_normalizer.py
-│       ├── deduplicator.py
-│       ├── data_exporter.py
-│       ├── validator.py
-│       └── main.py
-│
-├── logs/
-│   └── phase1.log                     ← Phase 1 execution logs
-│
-├── docs/
-│   ├── implementation_plan.md         ← Phase 1 & 2 planning
-│   ├── IMPLEMENTATION_SUMMARY.md      ← Phase 1 summary
-│   ├── PHASE1_RUNBOOK.md             ← Phase 1 execution guide
-│   └── PHASE_2_COMPLETE.md           ← Phase 2 summary (linked to root)
-│
-├── .venv/                             ← Virtual environment (Python packages)
-├── .git/                              ← Git repository
-├── .gitignore                         ← Git ignore rules
-└── .env                               ← Environment variables (if needed for Gemini API)
-```
-
----
-
-## 🚀 Understanding the Pipeline
-
-### Flow Diagram
-
-```
-Customer Message
+```text
+Customer message
     ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 1. INTENT CLASSIFICATION (TF-IDF + Logistic Regression)     │
-│    Model: models/intent_classifier.pkl                       │
-│    Input: customer_message (text)                            │
-│    Output: intent + confidence (0-1)                         │
-└─────────────────────────────────────────────────────────────┘
+Intent classification (TF-IDF + Logistic Regression)
     ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 2. SEMANTIC RETRIEVAL (FAISS + all-mpnet-base-v2)           │
-│    Index: data/brands/uber/index.faiss (18,570 vectors)     │
-│    Input: customer_message (embedded)                        │
-│    Output: top-5 similar cases + similarity scores           │
-└─────────────────────────────────────────────────────────────┘
+Dense semantic retrieval (FAISS)
     ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 3. GROUNDING CHECK (Embedding Similarity)                   │
-│    Input: retrieval scores                                   │
-│    Output: grounding_score (0-1)                            │
-└─────────────────────────────────────────────────────────────┘
+Escalation policy (rule-based, Gemini-assisted modes)
     ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 4. ESCALATION DECISION (3-Signal Hard Voting)               │
-│    Signal 1: Low intent confidence (< 0.5)                  │
-│    Signal 2: Weak grounding (retrieval_score < 0.7)         │
-│    Signal 3: Explicit escalation language detected          │
-│    Rule: 2+ signals → ESCALATE                              │
-│    Output: decision + reasons                                │
-└─────────────────────────────────────────────────────────────┘
-    ↓
-    ├─ YES (ESCALATE) → Route to human agent
-    │
-    └─ NO (AUTO-HANDLE)
-        ↓
-        ┌─────────────────────────────────────────────────────┐
-        │ 5. LLM GENERATION (Gemini 3.5 Flash Lite)           │
-        │    Input: customer_msg + intent + retrieved_cases   │
-        │    Output: grounded response                         │
-        └─────────────────────────────────────────────────────┘
-        ↓
-        Response + Evidence + Confidence
+Manual review / evaluation output
 ```
 
----
+The pipeline is intentionally modular:
+- Intent classification answers the question: what is the user primarily reporting?
+- Retrieval provides the most relevant historical support examples for grounding.
+- Escalation checks whether automation is safe or whether the case should be routed to a human.
 
-## 📊 Key Metrics (At a Glance)
+## Golden set and labeling process
 
-| Component | Metric | Baseline | Our System | Improvement |
-|-----------|--------|----------|-----------|------------|
-| **Intent Classification** | Macro F1 | 0.012 | 0.646 | **5,270%** |
-| **Semantic Retrieval** | Mean score | 0.000 | 0.675 | **Strong** |
-| **Escalation Decision** | F1 | N/A | 0.712 | **Strong** |
-| **System** | Overall | ❌ Not feasible | ✅ Working | ✅ Proven |
+The repository includes a hand-labeled golden set of 165 examples in `data/golden_set_labeled.jsonl`.
 
----
+The labeling process is described in `configs/labeling_rubric.md` and includes:
+- a single primary-intent label per message,
+- escalation labeling (`YES` / `NO`),
+- a support-quality rubric for response quality,
+- a process for handling ambiguous or multi-issue cases by choosing the primary problem.
 
-## 📋 File Guide for Evaluators
+This is a carefully curated evaluation reference set, not a full production dataset. The project reports only the verified number of examples from the current repository state.
 
-### To Understand the Approach
-1. **Read first**: `report.md` (10-section comprehensive analysis)
-2. **Then read**: `PHASE_2_COMPLETE.md` (executive summary)
+## Baselines and evaluation modes
 
-### To See the Code
-3. **Pipeline code**: `08_escalation_rag_pipeline.py` (full system)
-4. **Intent classifier**: `07_train_intent_classifier.py` (M6)
-5. **Retrieval**: `06_build_faiss_index.py` (M5)
+The current harness evaluates multiple modes and compares them against baselines:
 
-### To Run the Demo
-6. **Interactive UI**: `streamlit run app.py` (best way to see it work)
-7. **Batch evaluation**: `python 09_evaluation_harness.py` (metrics)
+- majority-class intent baseline
+- TF-IDF retrieval baseline
+- rule-only escalation
+- Gemini tiebreak escalation
+- Gemini always-final-call escalation
 
-### To Inspect Data
-8. **Golden set**: `data/golden_set_labeled.jsonl` (165 examples)
-9. **FAISS index**: `data/brands/uber/index.faiss` (18,570 vectors)
-10. **Models**: `models/intent_classifier.pkl` + `models/tfidf_vectorizer.pkl`
+The latest checked-in evaluation output in `reports/final_evaluation.json` reports the following verified values:
 
-### To See Results
-11. **Evaluation report**: `reports/final_evaluation.json` (JSON metrics)
-12. **Baseline scores**: `reports/baseline_scores.json`
-13. **Intent scores**: `reports/intent_scores.json`
-14. **Retrieval scores**: `reports/retrieval_scores.json`
+| Component | Verified value |
+|-----------|---------------|
+| Golden set size | 165 |
+| Intent classifier F1 | 0.5199 |
+| Majority-class baseline F1 | 0.0166 |
+| Intent improvement vs majority baseline | 3025.6% |
+| TF-IDF retrieval mean score | 0.4227 |
+| FAISS semantic retrieval mean score | 0.6747 |
+| Retrieval improvement vs TF-IDF baseline | 59.6% |
+| Rule-only escalation F1 | 0.4912 |
+| Gemini tiebreak escalation F1 | 0.6203 |
+| Gemini always-final-call escalation F1 | 0.6667 |
 
----
+The project must be interpreted as a prototype benchmark. These values are evidence-backed and should not be overstated beyond the actual implementation and evaluation configuration.
 
-## 🔬 Evaluation Workflow
+## Limitations and what was not built
 
-### Step 1: Verify Setup (2 min)
-```bash
-.\.venv\Scripts\Activate.ps1
-python -c "import faiss, streamlit, sentence_transformers; print('✓ All dependencies OK')"
-```
+The current repo should be understood as a constrained proof of concept. It does not claim the following:
+- production-ready support automation,
+- perfect retrieval,
+- fully validated production deployment,
+- universal generalization beyond the selected dataset and task framing.
 
-### Step 2: Run Interactive Demo (5 min)
-```bash
-streamlit run app.py
-# Try 3-5 customer messages
-# Observe: Intent, Retrieved cases, Escalation decision
-```
+Known limitations include:
+- class imbalance for underrepresented intents,
+- moderate retrieval quality on ambiguous requests,
+- escalation sensitivity to confidence and grounding signals,
+- dependence on external Gemini API access and rate limits,
+- a focused support-routing prototype rather than a broad customer-support platform.
 
-### Step 3: Run Full Evaluation (2 min)
-```bash
-python 09_evaluation_harness.py
-# Review metrics:
-# - Intent F1: 0.646
-# - Escalation F1: 0.709
-# - Retrieval: Perfect (NDCG@5 = 1.0)
-```
+## Attribution and external dependencies
 
-### Step 4: Inspect Golden Set (5 min)
-```bash
-python show_golden_set_examples.py
-# See 5 real examples with labels
-```
+The project relies on external libraries and tooling, including:
+- Python scientific and ML stack (pandas, scikit-learn, sentence-transformers, faiss-cpu)
+- Streamlit for the demo interface
+- Google Generative AI for the optional Gemini-assisted escalation path
+- PyTorch-related components used indirectly through the chosen embedding and ML stack
 
-### Step 5: Read Reports (10 min)
-```bash
-# Main report (10 sections, all key findings)
-cat report.md
+The project also uses a support dataset and processed support-thread data for the Uber-focused prototype. Where external assets are present in the repository, they should be treated as repository-local artifacts rather than a claim of broad production sponsorship or endorsement.
 
-# Executive summary
-cat PHASE_2_COMPLETE.md
+## Final notes
 
-# JSON metrics
-cat reports/final_evaluation.json
-```
+This repository demonstrates a working end-to-end support-routing prototype with transparent intermediate outputs and a reproducible harness. The checked-in evaluation output is the source of truth for the reported benchmark values, and the documentation should reflect those values conservatively.
 
-**Total evaluation time**: ~25 minutes
-
----
-
-## 🎯 What to Look For
-
-### ✅ Signs of a Good PoC
-- [x] Intent classifier works on real data (F1 = 0.646)
-- [x] Semantic retrieval finds relevant cases (NDCG@5 = 1.0)
-- [x] Escalation logic is explainable (3 signals with reasons)
-- [x] Golden set is representative (165 stratified examples)
-- [x] Error analysis identifies specific issues (26.7% misclassification on rare intents)
-- [x] Ablation shows each component contributes
-- [x] UI demo is interactive and clear
-
-### 🔍 Questions to Ask Yourself
-1. **Is the intent taxonomy reasonable?** (Check: `data/intent_taxonomy.json`)
-   - 13 categories, human-defined, grounded in real data ✓
-
-2. **Is the golden set representative?** (Check: `data/golden_set_labeled.jsonl`)
-   - 165 examples, stratified by intent/difficulty/tier ✓
-
-3. **Do the baselines make sense?** (Check: `reports/baseline_scores.json`)
-   - Majority class F1 = 0.012 (very weak) ✓
-   - TF-IDF retrieval NDCG@5 = 0.0 (no semantic understanding) ✓
-
-4. **Does the system beat the baselines?** (Check: `reports/final_evaluation.json`)
-   - Intent F1 = 0.646 vs 0.012 (+5,270%) ✓
-   - Escalation F1 = 0.709 (strong) ✓
-
-5. **Are errors documented?** (Check: `report.md` Section 5)
-   - 26.7% intent misclassification (data sparsity on rare intents) ✓
-   - 50.9% low retrieval scores (ambiguous cases) ✓
-   - 13.3% false escalations, 27.9% missed escalations ✓
-
-6. **Is the system deployable?** (Check: `report.md` Section 8)
-   - All components saved as .pkl and .faiss files ✓
-   - Inference latency ~520-1020ms (acceptable) ✓
-   - Monthly cost ~$5 for 100k queries ✓
-
----
-
-## 🔗 Key Files to Review
-
-| File | Purpose | Where to Find |
-|------|---------|---------------|
-| `report.md` | Full analysis (10 sections) | Root |
-| `app.py` | Interactive Streamlit demo | Root |
-| `09_evaluation_harness.py` | Comprehensive metrics | Root |
-| `data/golden_set_labeled.jsonl` | 165 labeled examples | data/ |
-| `data/brands/uber/index.faiss` | FAISS index (18,570 vectors) | data/brands/uber/ |
-| `models/intent_classifier.pkl` | Trained classifier | models/ |
-| `reports/final_evaluation.json` | Evaluation metrics | reports/ |
-| `configs/pipeline_config.json` | Full configuration | configs/ |
-
----
-
-## ❓ FAQ
-
-### Q: How do I run just the intent classifier?
-```python
-import pickle
-from sklearn.feature_extraction.text import TfidfVectorizer
-
-with open('models/tfidf_vectorizer.pkl', 'rb') as f:
-    tfidf = pickle.load(f)
-with open('models/intent_classifier.pkl', 'rb') as f:
-    clf = pickle.load(f)
-
-message = "I was charged twice"
-X = tfidf.transform([message])
-intent = clf.predict(X)[0]
-confidence = max(clf.predict_proba(X)[0])
-print(f"Intent: {intent}, Confidence: {confidence:.2f}")
-```
-
-### Q: How do I query the FAISS index?
-```python
-import faiss
-from sentence_transformers import SentenceTransformer
-
-model = SentenceTransformer('all-mpnet-base-v2')
-index = faiss.read_index('data/brands/uber/index.faiss')
-
-query = "I want a refund"
-embedding = model.encode([query], convert_to_numpy=True).astype('float32')
-distances, indices = index.search(embedding, k=5)
-print(f"Top-5 similar cases: {indices[0]}")
-```
-
-### Q: Where are the evaluation metrics?
-All in JSON format under `reports/`:
-- `baseline_scores.json` — Baselines (majority class, TF-IDF)
-- `intent_scores.json` — Classifier performance
-- `retrieval_scores.json` — FAISS validation
-- `final_evaluation.json` — Comprehensive evaluation
-
-### Q: Can I modify the pipeline?
-Sure! Key entry point is `08_escalation_rag_pipeline.py`. Key functions:
-- `compute_escalation_signals()` — Escalation logic (3 signals)
-- `retrieve_grounded_cases()` — FAISS retrieval
-- `run_support_agent()` — Full pipeline
-
-### Q: How does it handle Gemini API key?
-Set environment variable: `GOOGLE_API_KEY=your_key_here`  
-The pipeline will use it automatically in `08_escalation_rag_pipeline.py`
-
----
-
-## 📞 Support
-
-**Questions about the code?**
-- Check comments in `*.py` files (all modules are well-documented)
-- Read `report.md` Section 7 (Deployment Readiness)
-
-**Questions about results?**
-- Check `report.md` Section 4 (Results)
-- Check `report.md` Section 5 (Error Analysis)
-- Check `reports/final_evaluation.json` (raw metrics)
-
-**Questions about Phase 3?**
-- See `report.md` Section 9 (Recommendations)
-- See `PHASE_2_COMPLETE.md` (Phase 3 Roadmap)
-
----
-
-## ✅ Checklist for Evaluators
-
-- [ ] Read `report.md` (10 sections)
-- [ ] Run `streamlit run app.py` (interactive demo)
-- [ ] Run `python 09_evaluation_harness.py` (metrics)
-- [ ] Review `data/golden_set_labeled.jsonl` (golden set)
-- [ ] Check `reports/final_evaluation.json` (results)
-- [ ] Verify baseline comparison (5,270% improvement)
-- [ ] Inspect error analysis (26.7% misclassification documented)
-- [ ] Confirm all models are saved (intent_classifier.pkl, FAISS index)
-- [ ] Review Phase 3 recommendations (in report.md Section 9)
-
----
-
-## 🎉 Summary
-
-**What you're looking at:**
-- A working proof-of-concept AI support agent for Uber
-- 8 completed milestones (brand selection → evaluation)
-- 5,270% improvement over baseline
-- Fully tested, evaluated, and documented
-- Interactive Streamlit demo
-- Production-ready code and models
-
-**Time to understand**: ~25 minutes (demo + reports)  
-**Time to deploy**: ~1 week (Phase 3 hardening)  
-**Status**: ✅ Phase 2 Complete
-
----
-
-**Questions?** See `report.md` or check the code comments.
-
-**Ready to try it?** Run: `streamlit run app.py`
+For the primary final report, see `report.md`.

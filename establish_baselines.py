@@ -180,7 +180,8 @@ def evaluate_retrieval(golden_records, corpus_vectors, corpus_intents, tfidf_mod
         relevances = [1 if intent == true_intent else 0 for intent in top_intents]
         
         # Ideal DCG: all relevant (best case)
-        ideal_dcg = sum(1 / np.log2(i + 2) for i in range(min(sum(1 for _ in enumerate(corpus_intents) if _ == true_intent), top_k)))
+        num_relevant_total = sum(1 for intent in corpus_intents if intent == true_intent)
+        ideal_dcg = sum(1 / np.log2(i + 2) for i in range(min(num_relevant_total, top_k)))
         
         # Actual DCG
         dcg = sum(rel / np.log2(i + 2) for i, rel in enumerate(relevances))

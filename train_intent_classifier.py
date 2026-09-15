@@ -96,16 +96,57 @@ print("\n" + "=" * 80)
 print("STEP 1: PREPARE TRAINING DATA")
 print("=" * 80)
 
+# Load golden set thread IDs to exclude from training
+print("\nLoading golden set to exclude from training...")
+golden_thread_ids = set()
+with open('data/golden_set_labeled.jsonl', 'r') as f:
+    for line in f:
+        record = json.loads(line)
+        golden_thread_ids.add(record['thread_id'])
+
+print(f"✓ Loaded {len(golden_thread_ids)} golden set thread IDs")
+
+# Exclude golden set threads from training
+uber_df_before = len(uber_df)
+uber_df = uber_df[~uber_df['thread_id'].isin(golden_thread_ids)].reset_index(drop=True)
+uber_df_after = len(uber_df)
+excluded_count = uber_df_before - uber_df_after
+
+print(f"Excluded {excluded_count} golden set threads from training")
+print(f"Training pool: {uber_df_after:,} threads (after excluding {excluded_count} golden set threads)")
+
+if excluded_count == 0:
+    print("⚠️  WARNING: No golden set threads found in uber_df. Check thread_id consistency!")
+
 # Train/test split (80/20)
 X = list(uber_df['customer_text'].astype(str).values)
 y = list(uber_df['inferred_intent'].astype(str).values)
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
+# Check for classes with too few samples after golden set exclusion
+class_counts = pd.Series(y).value_counts()
+print(f"\nClass distribution after golden set exclusion:")
+for intent, count in class_counts.items():
+    print(f"  {intent}: {count}")
+
+# Only stratify on classes with at least 2 samples
+min_class_count = class_counts.min()
+if min_class_count < 2:
+    print(f"\n⚠️ Warning: Some classes have < 2 samples after exclusion")
+    print(f"   Stratified split may fail. Proceeding without stratification on rare classes.")
+    # Don't stratify, just do random split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+        stratify=None
+    )
+else:
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
 
 print(f"\nTraining set: {len(X_train):,}")
 print(f"Test set: {len(X_test):,}")
@@ -236,7 +277,7 @@ for item in metadata:
     intent = infer_intent(item['customer_text'], item['brand_reply'])
     index_intents.append(intent)
 
-print(f"\nIndex corpus intents (18,570 indexed):")
+print(f"\nIndex corpus intents ({len(metadata):,} indexed):")
 for intent, count in pd.Series(index_intents).value_counts().head(10).items():
     print(f"  {intent}: {count}")
 

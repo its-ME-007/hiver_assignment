@@ -1,7 +1,7 @@
 """
 Milestone 7: Escalation + RAG Pipeline
 - 3-signal escalation logic (intent confidence, retrieval score, explicit escalation)
-- Claude 3 Sonnet LLM generation with grounding
+- Google Gemini 3.5 Flash Lite LLM generation with grounding
 - Full pipeline integration
 """
 
@@ -12,6 +12,10 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
 import google.generativeai as genai
+from escalation_rules import decide_escalation, rate_limit_gemini_call
+from dotenv import load_dotenv
+
+load_dotenv()
 
 print("=" * 80)
 print("MILESTONE 7: ESCALATION + RAG PIPELINE")
@@ -44,53 +48,17 @@ print(f"✓ FAISS index: {faiss_index.ntotal} vectors")
 print(f"✓ Metadata: {len(metadata)} records")
 
 # Initialize Gemini client
-genai.configure(api_key=os.environ.get('GOOGLE_API_KEY'))
+genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 gemini_model = genai.GenerativeModel('gemini-3.5-flash-lite')
 
 print("\n" + "=" * 80)
-print("DEFINE ESCALATION LOGIC (3 SIGNALS)")
+print("DEFINE ESCALATION LOGIC (LAYERED: HARD TRIGGERS → 3-SIGNAL VOTE → GEMINI)")
 print("=" * 80)
 
-def compute_escalation_signals(customer_text, intent_pred, intent_conf, retrieval_score):
-    """
-    Compute 3 escalation signals:
-    1. Low intent confidence
-    2. Low retrieval score (weak grounding)
-    3. Explicit escalation language
-    """
-    signals = []
-    
-    # Signal 1: Low intent confidence
-    if intent_conf < 0.5:
-        signals.append(('low_intent_confidence', True))
-    else:
-        signals.append(('low_intent_confidence', False))
-    
-    # Signal 2: Low retrieval score
-    if retrieval_score < 0.7:
-        signals.append(('weak_grounding', True))
-    else:
-        signals.append(('weak_grounding', False))
-    
-    # Signal 3: Explicit escalation language
-    escalation_keywords = ['urgent', 'police', 'lawyer', 'sue', 'scam', 'fraud', 
-                          'refund now', 'immediately', 'demand', 'criminal']
-    has_escalation_language = any(kw in customer_text.lower() for kw in escalation_keywords)
-    signals.append(('explicit_escalation_signal', has_escalation_language))
-    
-    return signals
-
-def make_escalation_decision(signals):
-    """
-    Hard voting: escalate if 2+ signals are triggered
-    """
-    true_signals = [s[0] for s in signals if s[1]]
-    escalate = len(true_signals) >= 2
-    reasons = true_signals if escalate else []
-    
-    return escalate, reasons
-
-print(f"\n✓ Escalation logic defined: 3 signals, hard voting (2+ → escalate)")
+print(f"\n✓ Escalation logic defined:")
+print(f"    1. Hard triggers (safety/fraud/legal/account-compromise) → escalate immediately")
+print(f"    2. 3-signal hard voting (2+ of confidence/grounding/soft-language → escalate)")
+print(f"    3. Gemini tie-break for single-signal ambiguous cases (uses gemini_model below)")
 
 print("\n" + "=" * 80)
 print("DEFINE RAG PIPELINE")
@@ -188,11 +156,13 @@ def run_support_agent(customer_text, use_llm=False):
     # Step 2: Retrieve grounded cases
     retrieved_cases, retrieval_score = retrieve_grounded_cases(customer_text, top_k=3)
     
-    # Step 3: Compute escalation signals
-    signals = compute_escalation_signals(customer_text, intent_pred, intent_conf, retrieval_score)
-    
-    # Step 4: Make escalation decision
-    escalate, escalation_reasons = make_escalation_decision(signals)
+    # Step 3+4: Layered escalation decision (hard triggers → 3-signal vote →
+    # Gemini tie-break on ambiguous single-signal cases). Reuses the same
+    # gemini_model instance already loaded for generation, so this doesn't
+    # cost an extra API client -- just an extra call on the ambiguous subset.
+    escalate, escalation_reasons = decide_escalation(
+        customer_text, intent_conf, retrieval_score, gemini_model=gemini_model
+    )
     
     # Step 5: Generate response (if not escalated)
     draft_reply = None
@@ -212,6 +182,7 @@ def run_support_agent(customer_text, use_llm=False):
         )
         
         try:
+            rate_limit_gemini_call()  # shared limiter -- generation calls count against the same quota as escalation-judgment calls
             response = gemini_model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
@@ -228,9 +199,8 @@ def run_support_agent(customer_text, use_llm=False):
         'intent_confidence': intent_conf,
         'retrieved_cases': retrieved_cases,
         'retrieval_score': retrieval_score,
-        'escalation_signals': signals,
         'should_escalate': escalate,
-        'escalation_reasons': escalation_reasons,
+        'escalation_reasons': escalation_reasons,  # e.g. ['hard_safety_fraud_legal_trigger'] or ['low_intent_confidence', 'gemini_tiebreak_judgment: ...']
         'draft_reply': draft_reply
     }
 
@@ -275,11 +245,13 @@ pipeline_config = {
         'faiss_metadata': 'data/brands/uber/metadata.jsonl'
     },
     'escalation_signals': {
+        'hard_trigger': 'safety/fraud/legal/account-compromise language → escalate immediately, bypasses voting',
         'low_intent_confidence': 'intent_confidence < 0.5',
         'weak_grounding': 'retrieval_score < 0.7',
-        'explicit_escalation_signal': 'escalation keywords present'
+        'explicit_escalation_signal': 'soft urgency/anger keywords present',
+        'gemini_tiebreak': 'called only when exactly 1 of the 3 vote signals fires'
     },
-    'escalation_threshold': 'hard voting: 2+ signals → escalate',
+    'escalation_threshold': 'hard trigger → immediate; else 2-of-3 vote; else Gemini tie-break on single-signal ambiguity',
     'generation': {
         'model': 'gemini-3.5-flash-lite',
         'max_tokens': 200,
@@ -305,14 +277,43 @@ print("\n" + "=" * 80)
 print("✓ Milestone 7 COMPLETE")
 print("=" * 80)
 
+# Load metrics from reports for accurate summary
+metrics = {
+    'intent_f1': None,
+    'retrieval_ndcg': None,
+    'retrieval_score': None,
+    'corpus_size': faiss_index.ntotal,
+}
+
+try:
+    if os.path.exists('reports/intent_scores.json'):
+        with open('reports/intent_scores.json', 'r') as f:
+            intent_data = json.load(f)
+            metrics['intent_f1'] = intent_data.get('golden_macro_f1')
+except Exception as e:
+    print(f"Note: Could not load intent metrics: {e}")
+
+try:
+    if os.path.exists('reports/retrieval_scores.json'):
+        with open('reports/retrieval_scores.json', 'r') as f:
+            retrieval_data = json.load(f)
+            metrics['retrieval_ndcg'] = retrieval_data.get('ndcg@5')
+            metrics['retrieval_score'] = retrieval_data.get('mean_score')
+except Exception as e:
+    print(f"Note: Could not load retrieval metrics: {e}")
+
+# Build summary with live metrics
+intent_f1_str = f"F1={metrics['intent_f1']:.3f}" if metrics['intent_f1'] else "F1=N/A (not yet evaluated)"
+retrieval_str = f"NDCG@5={metrics['retrieval_ndcg']:.3f}" if metrics['retrieval_ndcg'] else "NDCG@5=N/A (not yet evaluated)"
+
 print(f"""
 Escalation + RAG Pipeline Summary:
-- Intent classifier: TF-IDF + Logistic Regression (F1=0.65)
-- Retrieval: FAISS semantic search (18,570 cases, NDCG@5=1.0)
-- Escalation: 3-signal hard voting
-  * Low intent confidence (< 0.5)
-  * Weak grounding (retrieval_score < 0.7)
-  * Explicit escalation language
+- Intent classifier: TF-IDF + Logistic Regression ({intent_f1_str})
+- Retrieval: FAISS semantic search ({metrics['corpus_size']:,} cases, {retrieval_str})
+- Escalation: layered policy
+  * Hard trigger (safety/fraud/legal/account-compromise) → immediate escalate
+  * Else 3-signal hard vote (2+ of confidence/grounding/soft-language)
+  * Else Gemini tie-break for single-signal ambiguous cases
 - Generation: Google Gemini 3.5 Flash Lite (when not escalated)
 
 Pipeline tested on 5 golden set examples (retrieval working perfectly)

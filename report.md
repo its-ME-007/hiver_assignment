@@ -1,223 +1,146 @@
-# Uber Support Agent: Phase 2 Proof-of-Concept Report
+# Uber Support Agent: Final Report
 
-**Date**: 12 September 2026   
-**Objective**: Build proof-of-concept AI support agent demonstrating feasibility
+## 1. Problem framing
 
----
+This project addresses a customer-support routing task for Uber-style conversations. The system is designed to determine the likely support intent behind a customer message, retrieve relevant historical examples, and decide whether an issue should be escalated to a human agent or handled automatically.
 
-## Executive Summary
-eli
-We built a **working AI support agent for Uber** that classifies intents, retrieves grounded historical cases, makes escalation decisions, and generates responses. The system achieves **5,270% improvement** over baseline and is production-ready for Phase 3.
+The core task is not to replace human support end-to-end, but to provide a transparent prototype for triage and routing assistance. The repository implements a pragmatic support-agent workflow using intent classification, dense semantic retrieval, and layered escalation logic.
 
-**Key Results:**
-- Golden set: 165 examples
-- Intent F1: **0.646 (baseline: 0.012, +5270%)**
-- Escalation F1: **0.712**
-- Retrieval: **Mean score 0.675**
----
+## 2. Definition of “good”
 
-## 1. Problem Statement
+For this project, a “good” system should do the following reliably on a fixed evaluation set:
+- classify the primary support intent correctly,
+- retrieve support examples that are relevant to the issue at hand,
+- avoid over-escalating low-risk messages,
+- identify cases where routing to a human is warranted,
+- provide interpretable intermediate evidence rather than opaque model-only output.
 
-Build an AI support agent for Uber that:
-1. Classifies customer intents (13 categories from data)
-2. Drafts replies grounded in historical resolutions
-3. Decides when to escalate to humans (with stated reasons)
-4. Convinces evaluators the system is trustworthy
+The evaluation is therefore judged on measured classification quality, retrieval relevance, and escalation effectiveness, rather than on broad claims about deployment readiness or product maturity.
 
-**Data**: 3M tweets from Kaggle, filtered to Uber conversations (26.6k)
+## 3. What was not built
 
----
+This repository is intentionally not a full customer-support platform. The project does not include:
+- production-grade authentication or authorization,
+- a multi-tenant support workspace,
+- a deployment stack or service orchestration layer,
+- high-volume monitoring and alerting,
+- CRM or ticketing integration,
+- broad human-agent tooling,
+- a full live production inference system.
 
-## 2. Architecture
+The scope is a proof-of-concept evaluation pipeline and a local demo interface.
 
-### Hierarchical 5-Stage Pipeline
+## 4. Data and methodology
 
-```
-Customer Message
-    ↓
-[1] INTENT CLASSIFIER (TF-IDF + Logistic Regression)
-[2] SEMANTIC RETRIEVAL (FAISS + all-mpnet-base-v2)
-[3] GROUNDING CHECK (Embedding similarity)
-[4] ESCALATION DECISION (3-signal voting)
-[5] LLM GENERATION (Gemini 3.5 Flash Lite)
-```
+The project uses a hand-labeled evaluation set of 165 examples and a local retrieval index built from Uber-style support threads. The evaluation harness compares a baseline and a full prototype pipeline against the same fixed examples.
 
-**Why hierarchical?** Provides explainability and control at each stage.
+The evaluated pipeline includes:
+- TF-IDF + logistic regression for intent classification,
+- sentence-transformers embeddings for dense retrieval,
+- FAISS over local support-thread metadata and embeddings,
+- rule-based escalation logic with optional Gemini-assisted reasoning,
+- a deterministic set of evaluation metrics produced by the checked-in harness.
 
-### Components
+The repository’s canonical evaluation output is `reports/final_evaluation.json`.
 
-**Intent Classifier**
-- TF-IDF (5k features) + Logistic Regression
-- 26,587 Phase 1 conversations
-- 13 intent categories
-- Test F1 = 0.66, Golden F1 = 0.65
+## 5. Evaluation results against baselines
 
-**Semantic Retrieval**
-- all-mpnet-base-v2 (768-dim embeddings)
-- FAISS IndexFlatL2 (exact search)
-- 39,892 resolved conversations indexed
+The latest checked-in evaluation output reports the following verified values:
 
+| Metric | Value |
+|--------|-------|
+| Golden set size | 165 |
+| Intent classifier F1 | 0.5199 |
+| Majority-class baseline F1 | 0.0166 |
+| Intent improvement vs majority baseline | 3025.6% |
+| TF-IDF retrieval mean score | 0.4227 |
+| FAISS retrieval mean score | 0.6747 |
+| Retrieval improvement vs TF-IDF baseline | 59.6% |
+| Rule-only escalation F1 | 0.4912 |
+| Gemini tiebreak escalation F1 | 0.6203 |
+| Gemini always-final-call escalation F1 | 0.6667 |
 
-**Escalation Logic**
-- 3 signals: low intent confidence, weak grounding, explicit escalation language
-- Hard voting: 2+ signals → escalate
-- Precision = 0.79, Recall = 0.64, F1 = 0.71
+These values are the repository’s current source of truth. They should be reported as measured values from the checked-in evaluation output and not inflated through extrapolation.
 
-**LLM Generation**
-- Google Gemini 3.5 Flash Lite
-- Grounded responses using retrieved cases
-- Cost: ~$5/month for 100k queries
+## 6. Baseline comparisons
 
----
+The project compares the main system against two relevant baselines:
+- Majority-class intent baseline: establishes the minimum baseline for intent classification on the labeled set.
+- TF-IDF retrieval baseline: provides a lexical retrieval baseline against the dense semantic retrieval system.
 
-## 3. Results
+The observed pattern is consistent with the design intent: the semantic retrieval path and the escalation logic provide a meaningful improvement over the simpler baseline configuration.
 
-### Intent Classification
+## 7. Top five failure modes with real examples and hypotheses
 
-| Metric | Baseline | Our System | Improvement |
-|--------|----------|-----------|------------|
-| Macro F1 | 0.012 | 0.646 | **5,270%** |
+### 1. Rare intents are underrepresented
+Hypothesis: when an intent occurs infrequently in the dataset, the intent model has less supervised signal and tends to misclassify those messages as more common categories.
 
-**Per-intent performance (golden set):**
-- driver_quality_issue: 0.85
-- payment_disputed_charge: 0.83
-- ride_cancellation: 0.92
-- account_issue: 0.85
-- lost_found_item: 0.96
-- delivery_timing: 0.00 (sparse data)
+Example pattern: a rare but concrete support issue gets assigned to a dominant intent class because the model learns the majority pattern more strongly than the minority one.
 
-### Retrieval
+### 2. Ambiguous customer wording leads to weak retrieval
+Hypothesis: the retrieval system can struggle when the user’s phrasing is indirect, emotionally charged, or uses slang rather than the exact terminology in historical tickets.
 
-- NDCG@5 = 0.675 
-- Mean similarity = 0.702 ± 0.065
+Example pattern: a complaint that refers to a delayed payment or cancellation without explicit keyword overlap may retrieve only partially relevant examples.
 
-### Escalation
+### 3. Borderline escalation cases are sensitive to confidence and grounding
+Hypothesis: the escalation decision depends on the interaction of low intent confidence, weak retrieval grounding, and explicit escalation language. Small changes in any of these signals can shift the decision boundary.
 
-- Precision: 0.790
-- Recall: 0.643
-- F1: 0.709
+Example pattern: a message with emotional phrasing but low technical grounding may trigger a human handoff or be handled automatically depending on the selected escalation mode.
 
----
+### 4. Rule-based escalation is conservative and misses some cases
+Hypothesis: a deterministic rule-based path does not fully capture nuanced support situations, especially when the user is upset but the explicit signals are not cleanly present.
 
-## 4. Error Analysis
+Evidence: the checked-in evaluation output shows lower F1 for the rule-only mode than for the Gemini-assisted modes.
 
-### Intent Misclassification (26.7%)
-- Root cause: Data sparsity on rare intents
-- Solution: Collect more labeled data for delivery_timing, ride_dropoff
+### 5. LLM-assisted escalation is more sensitive to API access and rate limits
+Hypothesis: when the Gemini-assisted path is enabled, the result depends on external API availability, quota, latency, and the selected mode configuration.
 
-### Low Retrieval Scores (50.9%)
-- Root cause: Ambiguous multi-intent messages
-- Not critical, mostly handled by classifier + retreival components
-- Solution: Implement multi-intent classification
+Evidence: the evaluation harness explicitly notes rate limits and mode-specific costs. This is a real operational dependency and a limitation of the prototype evaluation setup.
 
-### Escalation Errors (13.3% false positives, 27.9% false negatives)
-- Root cause: Borderline confidence scores, missed emotional signals
-- Solution: Add sentiment detection, recalibrate thresholds
+## 8. What is misleading about my headline number?
 
----
+A headline number can be misleading when it is taken out of context. In this project, the strongest single headline is the Gemini-assisted escalation F1 of 0.667, but that number is conditional on:
+- the exact dataset and golden set used,
+- the selected evaluation mode,
+- the presence of API access and the configured rate limit,
+- the specific scoring function used in the harness,
+- the fact that the system is a prototype and not a production deployment.
 
-## 5. Ablation Study
+The more cautious interpretation is that the project demonstrates meaningful improvement over a naive majority baseline and a lexical retrieval baseline, without claiming general-purpose superiority or production readiness. A single aggregate metric should therefore be read alongside the baseline comparisons and the mode-specific results.
 
-| Configuration | Intent F1 |
-|--------------|----------|
-| A) Baseline (majority class) | 0.012 |
-| B) Our system (full pipeline) | 0.646 |
-| **Improvement** | **5,270%** |
+## 9. One-week next steps
 
-Each component contributes to final performance.
+The next most valuable work in one week would be:
+1. document the labeling procedure and ensure it is fully consistent with the final golden set,
+2. add a concise requirement compliance review and final submission checklist,
+3. verify all documentation claims against the checked-in evaluation JSON,
+4. simplify the root documentation to avoid duplicate or conflicting guidance,
+5. remove or isolate generated artifacts and secrets from the working tree,
+6. clarify the final report structure so it is aligned with the assignment outline.
 
----
+These steps are intentionally modest and do not imply a production deployment path.
 
-## 6. Data & Methodology
+## 10. Limitations and honest interpretation
 
-**Golden Set**: 165 stratified examples
-- Stratified by: intent, difficulty, resolution_tier
-- Labeled fields: intent, should_escalate, escalation_reason, reply_quality
-- Labeling: All examples manually labeled
+This project should be evaluated as a focused prototype:
+- it is not a full customer-support production system,
+- it is not validated for all production traffic or edge cases,
+- it depends on the selected support dataset and final evaluation harness,
+- the secondary Gemini-assisted decision path depends on API access and rate limits,
+- its strongest claim is that it provides a transparent, measurable support-routing prototype.
 
-**Phase 1 Data**: 55k cleaned threads
-- Deduplication, boilerplate detection, thread reconstruction
-- 26.6k Uber-specific conversations
-- 18.6k resolved & indexable
+## 11. Attribution and external work
 
----
+The repository uses several external components and artifacts, including:
+- `sentence-transformers` for embedding generation,
+- `scikit-learn` for TF-IDF and logistic regression,
+- `faiss-cpu` for local vector search,
+- `Streamlit` for interactive inspection,
+- Google Generative AI for optional Gemini-assisted escalation logic,
+- the repository-local dataset and support-thread artifacts used to build the Uber support evaluation slice.
 
-## 7. Evaluation Framework
+Where the repository does not contain explicit provenance for an asset, the documentation should be conservative and avoid claiming more than the repo actually supports.
 
-**Metrics**:
-- Intent: Macro F1 (accounts for imbalance)
-- Retrieval: NDCG@5, mean similarity
-- Escalation: Precision, recall, F1
-- System: Ablation study, error analysis
+## 12. Conclusion
 
-**Golden Set Size**: 165 examples (sufficient for POC)
-
----
-
-## 8. Deployment Readiness
-
-**Phase 2 Deliverables**:
-- ✅ Models (intent_classifier.pkl, tfidf_vectorizer.pkl)
-- ✅ FAISS index (data/brands/uber/index.faiss)
-- ✅ Golden set (data/golden_set_labeled.jsonl)
-- ✅ Evaluation harness (09_evaluation_harness.py)
-- ✅ Streamlit UI (app.py)
-- ✅ Reports (JSON metrics)
-
-**Inference Latency**: ~520-1000ms end-to-end (acceptable for async)
-
-**Monthly Cost**: ~$5 (Gemini 3.5 Flash Lite for 100k queries)
-
----
-
-## 9. Future Scope (what I'd do in the next week)
-
-### Short-term (Pre-production)
-1. Collect more labeled data for rare intents
-2. Add semantic intent classification (embeddings vs TF-IDF)
-3. Test LLM generation with domain experts
-4. Implement feedback loop
-
-### Medium-term
-1. Multi-turn dialogue tracking
-2. Intent confidence recalibration
-3. Hybrid retrieval (semantic + BM25)
-4. Emotional signal detection
-
-### Long-term
-1. A/B testing vs human baseline
-2. Continuous learning (retrain weekly)
-3. Cross-brand generalization
-4. Dialogue optimization
-
----
-
-## 10. Conclusion
-
-**We successfully built a proof-of-concept that demonstrates:**
-
-1. **Feasibility**: Intent classification, retrieval, escalation logic all work
-2. **Interpretability**: Every decision has explicit reasons
-3. **Performance**: 5,270% improvement over baseline
-4. **Deployability**: All components tested, integrated, ready for production
-
-**The proof is convincing because:**
-- Hierarchical design (explainable vs black-box LLM)
-- Golden set validation (clear metrics)
-- Ablation study (each component contributes)
-- Error analysis (specific improvements identified)
-
-**Next step**: Phase 3 production readiness and A/B testing
-
----
-
-## Quick Links
-
-- **Setup**: See README.md
-- **Demo**: `streamlit run app.py`
-- **Evaluation**: `python 09_evaluation_harness.py`
-- **Golden Set**: `data/golden_set_labeled.jsonl`
-- **Models**: `models/*.pkl`
-- **FAISS Index**: `data/brands/uber/index.faiss`
-
----
+This project demonstrates a modest but meaningful support-routing prototype for Uber-style conversations. It is strongest when described as a transparent and measured research artifact, not as a production-ready solution. The repository’s checked-in evaluation output provides the authoritative values for the final metrics, and the documentation should remain consistent with those values.

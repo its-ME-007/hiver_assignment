@@ -41,10 +41,66 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import faiss
 from sklearn.metrics import f1_score, precision_recall_fscore_support
+from escalation_rules import decide_escalation
+import escalation_rules
+from dotenv import load_dotenv
+
+load_dotenv()
 
 print("=" * 80)
 print("MILESTONE 8: EVALUATION HARNESS")
 print("=" * 80)
+
+# Load golden set early -- needed below for the compare_all time estimate,
+# and again later for the actual evaluation loop.
+with open('data/golden_set_labeled.jsonl', 'r') as f:
+    golden_records = [json.loads(line) for line in f.readlines()]
+print(f"\nGolden set: {len(golden_records)} examples")
+
+# Gemini API rate limit (requests per rolling 60 seconds). Default matches
+# the free-tier cap. If you have a paid key with a higher quota, raise
+# this (or set the GEMINI_MAX_RPM environment variable instead) -- doing
+# so meaningfully speeds up 'compare_all' below, which can otherwise take
+# a while since it makes one call per golden example for gemini_always
+# plus one per ambiguous case for tiebreak, all throttled to this rate.
+GEMINI_REQUESTS_PER_MINUTE = 12
+escalation_rules.set_gemini_rate_limit(GEMINI_REQUESTS_PER_MINUTE)
+
+# How Gemini participates in escalation decisions for this run:
+#   'off'          - rule-based only (hard triggers + 3-signal vote), no API calls
+#   'tiebreak'     - Gemini breaks ties only on ambiguous single-signal cases
+#   'gemini_always'- Gemini makes the final call on every non-hard-trigger message
+#   'compare_all'  - runs rule-only, tiebreak, AND gemini_always, prints all three
+#                    side by side. Costs the most API calls (tiebreak-eligible
+#                    count + one per message for gemini_always) but is the only
+#                    mode that tells you whether full authority actually beats
+#                    cheaper tie-breaking, rather than assuming it does.
+ESCALATION_MODE = 'compare_all'
+
+gemini_model = None
+if ESCALATION_MODE != 'off':
+    import google.generativeai as genai
+    api_key = os.environ.get('GOOGLE_API_KEY')
+    if api_key:
+        genai.configure(api_key=api_key)
+        gemini_model = genai.GenerativeModel('gemini-3.5-flash-lite')
+        print(f"\n✓ Gemini ENABLED for this run (ESCALATION_MODE='{ESCALATION_MODE}')")
+        print(f"  Rate limit: {GEMINI_REQUESTS_PER_MINUTE} requests/min "
+              f"({'disabled' if not GEMINI_REQUESTS_PER_MINUTE else 'enforced via sliding 60s window'})")
+        if ESCALATION_MODE == 'compare_all' and GEMINI_REQUESTS_PER_MINUTE:
+            est_calls = len(golden_records)  # gemini_always alone; tiebreak adds more on top, unknown until run
+            est_minutes = est_calls / GEMINI_REQUESTS_PER_MINUTE
+            print(f"  Note: compare_all makes >= {est_calls} Gemini calls (gemini_always mode alone) "
+                  f"plus tiebreak calls on top -- at this rate limit, expect at least ~{est_minutes:.1f} "
+                  f"minutes just for the gemini_always pass. Lower GEMINI_REQUESTS_PER_MINUTE only if "
+                  f"you're sure your quota is higher than the free tier.")
+    else:
+        print(f"\nWARNING: ESCALATION_MODE='{ESCALATION_MODE}' but GOOGLE_API_KEY is not "
+              f"set -- all Gemini-dependent decisions will fall back to the rule-based "
+              f"heuristic. Fix the env var if you want real Gemini numbers.")
+else:
+    print("\nNote: ESCALATION_MODE='off' -- escalation numbers reflect hard-triggers + "
+          "3-signal vote only, no Gemini calls.")
 
 # Load all components
 print("\nLoading components...")
@@ -63,40 +119,11 @@ with open('data/brands/uber/metadata.jsonl', 'r') as f:
     for line in f:
         metadata.append(json.loads(line))
 
-# Load golden set
-with open('data/golden_set_labeled.jsonl', 'r') as f:
-    golden_records = [json.loads(line) for line in f.readlines()]
-
-print(f"Golden set: {len(golden_records)} examples")
+# (golden_records already loaded above, before the Gemini config block)
 
 print("\n" + "=" * 80)
 print("EVALUATION METRICS")
 print("=" * 80)
-
-
-def has_explicit_escalation_language(text):
-    """
-    Signal 3 of the documented 3-signal escalation scheme.
-
-    NOTE: this is a reconstruction based on the README's description, not
-    copied from 08_escalation_rag_pipeline.py's actual implementation.
-    Reconcile against that file before trusting this as equivalent to
-    what the live pipeline does -- ideally both should call one shared
-    function instead of maintaining this list twice.
-    """
-    if not isinstance(text, str):
-        return False
-    text_lower = text.lower()
-    escalation_phrases = [
-        'lawyer', 'legal action', 'sue', 'attorney',
-        'bbb', 'better business bureau',
-        'unacceptable', 'ridiculous', 'disgusting',
-        'cancel my account', 'never using', 'switching to',
-        'refund now', 'refund immediately', 'right now',
-        'dispute', 'chargeback', 'report this',
-        'third time', 'again and again', 'every time',
-    ]
-    return any(phrase in text_lower for phrase in escalation_phrases)
 
 
 def retrieve_cases(customer_text, top_k=5):
@@ -113,10 +140,19 @@ print(f"\nEvaluating on {len(golden_records)} golden set examples...")
 intent_preds = []
 intent_trues = []
 retrieval_scores = []
-escalation_preds = []
 escalation_trues = []
 
-for record in golden_records:
+# Separate prediction lists per mode -- only the ones actually being run
+# get populated; the others stay empty and are skipped in reporting.
+escalation_preds_rule_only = []
+escalation_preds_tiebreak = []
+escalation_preds_gemini_always = []
+
+run_rule_only = ESCALATION_MODE in ('off', 'tiebreak', 'gemini_always', 'compare_all')  # always computed as the free reference point
+run_tiebreak = ESCALATION_MODE in ('tiebreak', 'compare_all') and gemini_model is not None
+run_gemini_always = ESCALATION_MODE in ('gemini_always', 'compare_all') and gemini_model is not None
+
+for i, record in enumerate(golden_records):
     # Intent prediction
     X_tfidf = tfidf.transform([record['customer_message']])
     intent_pred = intent_clf.predict(X_tfidf)[0]
@@ -127,24 +163,66 @@ for record in golden_records:
     indices, sims, ret_score = retrieve_cases(record['customer_message'], top_k=5)
     retrieval_scores.append(ret_score)
 
-    # Escalation: 3-signal hard voting (2-of-3 fires), matching the
-    # documented system instead of the previous 2-signal OR rule.
     intent_conf = float(np.max(intent_clf.predict_proba(X_tfidf)[0]))
-    signal_1_low_confidence = intent_conf < 0.5
-    signal_2_weak_grounding = ret_score < 0.7
-    signal_3_explicit_language = has_explicit_escalation_language(record['customer_message'])
-
-    signals_fired = sum([signal_1_low_confidence, signal_2_weak_grounding, signal_3_explicit_language])
-    escalate_pred = signals_fired >= 2
-
-    escalation_preds.append(escalate_pred)
     escalation_trues.append(record['should_escalate'] == 'YES')
+
+    # Rule-only reference: same function, gemini_model=None, so hard
+    # triggers + 3-signal vote are identical to what 'tiebreak' and
+    # 'gemini_always' fall back on -- this isolates exactly what Gemini
+    # adds on top, in either mode.
+    if run_rule_only:
+        pred, _ = decide_escalation(record['customer_message'], intent_conf, ret_score, gemini_model=None)
+        escalation_preds_rule_only.append(pred)
+
+    if run_tiebreak:
+        pred, _ = decide_escalation(record['customer_message'], intent_conf, ret_score,
+                                     gemini_model=gemini_model, mode='tiebreak')
+        escalation_preds_tiebreak.append(pred)
+
+    if run_gemini_always:
+        pred, _ = decide_escalation(record['customer_message'], intent_conf, ret_score,
+                                     gemini_model=gemini_model, mode='gemini_always')
+        escalation_preds_gemini_always.append(pred)
+
+    if (i + 1) % 25 == 0 or (i + 1) == len(golden_records):
+        print(f"  {i + 1}/{len(golden_records)}")
 
 # Compute metrics
 intent_f1 = f1_score(intent_trues, intent_preds, average='macro', zero_division=0)
-escalation_prec, escalation_rec, escalation_f1, _ = precision_recall_fscore_support(
-    escalation_trues, escalation_preds, average='binary', zero_division=0
-)
+
+
+def escalation_metrics(preds, trues):
+    if not preds:
+        return None
+    prec, rec, f1, _ = precision_recall_fscore_support(trues, preds, average='binary', zero_division=0)
+    return {'precision': float(prec), 'recall': float(rec), 'f1': float(f1)}
+
+
+metrics_rule_only = escalation_metrics(escalation_preds_rule_only, escalation_trues)
+metrics_tiebreak = escalation_metrics(escalation_preds_tiebreak, escalation_trues)
+metrics_gemini_always = escalation_metrics(escalation_preds_gemini_always, escalation_trues)
+
+# For downstream code (error analysis, saved report) that expects one
+# "the" escalation prediction set, prefer the most complete mode that
+# actually ran: gemini_always > tiebreak > rule_only.
+if escalation_preds_gemini_always:
+    escalation_preds = escalation_preds_gemini_always
+    escalation_prec, escalation_rec, escalation_f1 = (
+        metrics_gemini_always['precision'], metrics_gemini_always['recall'], metrics_gemini_always['f1']
+    )
+    active_mode_label = 'gemini_always'
+elif escalation_preds_tiebreak:
+    escalation_preds = escalation_preds_tiebreak
+    escalation_prec, escalation_rec, escalation_f1 = (
+        metrics_tiebreak['precision'], metrics_tiebreak['recall'], metrics_tiebreak['f1']
+    )
+    active_mode_label = 'tiebreak'
+else:
+    escalation_preds = escalation_preds_rule_only
+    escalation_prec, escalation_rec, escalation_f1 = (
+        metrics_rule_only['precision'], metrics_rule_only['recall'], metrics_rule_only['f1']
+    )
+    active_mode_label = 'rule_only'
 
 print(f"\n### INTENT CLASSIFICATION ###")
 print(f"Macro F1: {intent_f1:.3f}")
@@ -153,10 +231,15 @@ print(f"\n### RETRIEVAL ###")
 print(f"Mean retrieval score: {np.mean(retrieval_scores):.3f} (+/-{np.std(retrieval_scores):.3f})")
 print(f"Min: {np.min(retrieval_scores):.3f}, Max: {np.max(retrieval_scores):.3f}")
 
-print(f"\n### ESCALATION DECISION (3-signal, 2-of-3 vote) ###")
-print(f"Precision: {escalation_prec:.3f}")
-print(f"Recall: {escalation_rec:.3f}")
-print(f"F1: {escalation_f1:.3f}")
+gemini_status = f"ESCALATION_MODE='{ESCALATION_MODE}'" + (", Gemini unavailable (fell back to rule-only)" if ESCALATION_MODE != 'off' and gemini_model is None else "")
+print(f"\n### ESCALATION DECISION ({gemini_status}) ###")
+if metrics_rule_only:
+    print(f"Rule-only (hard trigger + 3-signal vote): Precision={metrics_rule_only['precision']:.3f}, Recall={metrics_rule_only['recall']:.3f}, F1={metrics_rule_only['f1']:.3f}")
+if metrics_tiebreak:
+    print(f"Gemini tiebreak mode:                     Precision={metrics_tiebreak['precision']:.3f}, Recall={metrics_tiebreak['recall']:.3f}, F1={metrics_tiebreak['f1']:.3f}")
+if metrics_gemini_always:
+    print(f"Gemini always-final-call mode:             Precision={metrics_gemini_always['precision']:.3f}, Recall={metrics_gemini_always['recall']:.3f}, F1={metrics_gemini_always['f1']:.3f}")
+print(f"\n(Reporting '{active_mode_label}' as the primary escalation metric below and in the saved JSON.)")
 
 print("\n" + "=" * 80)
 print("ABLATION STUDY")
@@ -267,10 +350,15 @@ report = {
             'tfidf_baseline_mean_score': tfidf_mean_score,
         },
         'escalation': {
-            'type': '3-signal hard voting (2-of-3), see has_explicit_escalation_language()',
-            'precision': float(escalation_prec),
-            'recall': float(escalation_rec),
-            'f1': float(escalation_f1)
+            'type': f'layered policy, ESCALATION_MODE={ESCALATION_MODE}, primary metric from {active_mode_label}',
+            'primary': {
+                'precision': float(escalation_prec),
+                'recall': float(escalation_rec),
+                'f1': float(escalation_f1)
+            },
+            'rule_only': metrics_rule_only,
+            'tiebreak': metrics_tiebreak,
+            'gemini_always': metrics_gemini_always,
         }
     },
     'ablation': {
@@ -311,14 +399,14 @@ print(f"""
 Summary:
 - Golden set: {len(golden_records)} examples
 - Intent F1: {intent_f1:.3f} (majority-class baseline: {baseline_intent_f1:.3f})
-- Escalation F1: {escalation_f1:.3f} (3-signal, 2-of-3 vote)
+- Escalation F1: {escalation_f1:.3f} (mode: {active_mode_label})
 - Retrieval: Mean score {np.mean(retrieval_scores):.3f} (TF-IDF baseline: {tfidf_mean_score:.3f})
 
 Key findings:
 - Intent classifier F1 {intent_f1:.3f} vs majority-class baseline {baseline_intent_f1:.3f}
   {"(" + f"{intent_improvement_pct:.0f}% relative improvement)" if intent_improvement_pct is not None else "(baseline F1 is 0, relative improvement undefined)"}
 - {strong_retrieval_pct:.0f}% of cases have strong retrieval (>=0.7); {low_retrieval_pct:.0f}% have weak retrieval (<0.7)
-- Escalation F1: {escalation_f1:.3f} (precision {escalation_prec:.3f}, recall {escalation_rec:.3f})
+- Escalation F1: {escalation_f1:.3f} (mode: {active_mode_label}; precision {escalation_prec:.3f}, recall {escalation_rec:.3f})
 
 Ready for Streamlit UI demo and final report.
 """)

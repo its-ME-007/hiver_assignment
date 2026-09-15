@@ -1,39 +1,56 @@
 {
-  "timestamp": "2026-09-14T20:16:57.739611",
+  "timestamp": "2026-09-16T00:25:50.010844",
   "golden_set_size": 165,
   "components": {
     "intent_classifier": {
       "type": "TF-IDF + Logistic Regression",
       "test_f1": null,
-      "golden_f1": 0.5615492496782343
+      "golden_f1": 0.5198568306532383
     },
     "retrieval": {
       "type": "FAISS semantic search",
       "corpus_size": 39892,
       "mean_score": 0.6746568083763123,
       "std_dev": 0.06459219008684158,
-      "tfidf_baseline_mean_score": 0.41735018797266177
+      "tfidf_baseline_mean_score": 0.4227386937151626
     },
     "escalation": {
-      "type": "3-signal hard voting (2-of-3), see has_explicit_escalation_language()",
-      "precision": 0.7346938775510204,
-      "recall": 0.3076923076923077,
-      "f1": 0.43373493975903615
+      "type": "layered policy, ESCALATION_MODE=compare_all, primary metric from gemini_always",
+      "primary": {
+        "precision": 0.9206349206349206,
+        "recall": 0.49572649572649574,
+        "f1": 0.6444444444444445
+      },
+      "rule_only": {
+        "precision": 0.7777777777777778,
+        "recall": 0.358974358974359,
+        "f1": 0.49122807017543857
+      },
+      "tiebreak": {
+        "precision": 0.8285714285714286,
+        "recall": 0.49572649572649574,
+        "f1": 0.6203208556149733
+      },
+      "gemini_always": {
+        "precision": 0.9206349206349206,
+        "recall": 0.49572649572649574,
+        "f1": 0.6444444444444445
+      }
     }
   },
   "ablation": {
     "majority_class": "driver_quality_issue",
     "baseline_intent_f1": 0.016632016632016633,
-    "system_intent_f1": 0.5615492496782343,
-    "intent_improvement_pct": 3276.3148636903834,
-    "tfidf_baseline_retrieval_score": 0.41735018797266177,
+    "system_intent_f1": 0.5198568306532383,
+    "intent_improvement_pct": 3025.639194302595,
+    "tfidf_baseline_retrieval_score": 0.4227386937151626,
     "system_retrieval_score": 0.6746568083763123,
-    "retrieval_improvement_pct": 61.65244674682617
+    "retrieval_improvement_pct": 59.5919189453125
   },
   "error_analysis": {
-    "intent_errors": 61,
+    "intent_errors": 69,
     "low_retrieval_cases": 108,
-    "false_escalations": 13,
-    "missed_escalations": 81
+    "false_escalations": 5,
+    "missed_escalations": 59
   }
 }

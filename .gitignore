@@ -1,2 +1,4 @@
 .env 
+.kiro
+.venv
 __pycache__
