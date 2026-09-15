@@ -50,6 +50,24 @@ GEMINI_MAX_RPM=12
 
 This project should be treated as a local evaluator setup. The actual key must be supplied externally and not committed to version control.
 
+## Local retrieval artifacts
+
+The FAISS index, its embedding matrix, and matching metadata are generated local runtime artifacts and are intentionally excluded from Git. This keeps the repository below GitHub's file-size limit while preserving reproducibility.
+
+Before running the Streamlit demo, retrieval pipeline, or evaluation harness in a fresh clone, generate the artifacts from the included processed data:
+
+```powershell
+python build_faiss_index.py
+```
+
+This creates the following local files under `data/brands/uber/`:
+
+- `index.faiss`
+- `embeddings.npy`
+- `metadata.jsonl`
+
+The build can take time and may download the configured sentence-transformer model on its first run. Existing local artifacts may be retained for normal use, but they should not be committed.
+
 ## Quick-start evaluator guide
 
 The repository includes a short evaluator guide in `EVALUATOR_START_HERE.txt`. That file should be treated as the fast-start path for reviewers and remains intentionally lightweight.

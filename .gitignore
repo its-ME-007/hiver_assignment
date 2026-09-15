@@ -2,3 +2,8 @@
 .kiro
 .venv
 __pycache__
+
+# Reproducible local retrieval artifacts. Rebuild with build_faiss_index.py.
+data/brands/uber/index.faiss
+data/brands/uber/embeddings.npy
+data/brands/uber/metadata.jsonl
